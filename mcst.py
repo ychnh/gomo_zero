@@ -31,7 +31,7 @@ def F(S):
 #R = defaultdict(lambda:True)
 
 import torch
-from util import Xidx_rc, Xrc_idx, any3, any5, any4
+from util import Xidx_rc, Xrc_idx, find_win
 
 class State:
 
@@ -39,6 +39,10 @@ class State:
         KK = K**2
         self.K, self.KK = K, KK
         self.unif_p2i= [1/(KK-i) for i in range(KK)]
+
+        x_plyr0 = torch.full((K,K), 0).bool()
+        x_plyr1 = torch.full((K,K), 1).bool()
+        self.x_PLYR = {0:x_plyr0, 1:x_plyr1}
 
         self._reset()
         self.node = None
@@ -73,7 +77,8 @@ class State:
 
     def _reset(self):
         K = self.K
-        self.M = torch.ByteTensor(K*[K*[0]])
+        #self.M = torch.ByteTensor(K*[K*[0]])
+        self.M = np.array(K*[K*[0]])
         self.A = defaultdict(lambda:True)
         self.lm = None
         self.i = 0
@@ -88,7 +93,7 @@ class State:
         p = (self.i-1)%2
 
         isTerminal, z = False, None
-        if True in any3(M, Xrc_idx(lm,K)): isTerminal,z = True,p
+        if find_win(M, Xrc_idx(lm,K)): isTerminal,z = True,p
         elif self.i >= len(self): isTerminal,z = True,-1
 
         if isTerminal: self.node.setterminal()
@@ -100,12 +105,14 @@ class State:
         return x,PI
 
     def get_x(self):
-        M = self.M
+        M = torch.ByteTensor( self.M )
         p1,p2 = (M==1), (M==2)
 
         plyr = self.node.p if self.node!=None else 0
-        p = torch.full(p1.shape, plyr).bool()
-        x = torch.stack([p1,p2,p])
+        plyr = self.x_PLYR[plyr]
+        #p = torch.full(p1.shape, plyr).bool()
+        #x = torch.stack([p1,p2,plyr])
+        x = torch.stack([p1,p2,plyr])
         return x
 
 
@@ -130,6 +137,10 @@ class Node:
         self.W = defaultdict(int)
         self.Q = defaultdict(int)
         self.N = defaultdict(int)
+        self.NT = 0
+
+        #NEW CHANGE
+        self.BP = self.P
 
         self.down = defaultdict(Node)
         self.up = S.node
@@ -149,18 +160,20 @@ class Node:
     def branch(self):
         N,Q,P = self.N , self.Q, self.P
 
-        NT = sum( [N[i] for i in self.N] )
-        if NT==0: NT=1 #Initial start? TODO: validate and remove
-        bp = lambda i: ( Q[i] + P[i] * NT/(1+N[i]) )
+        #NEW CHANGE
+        NT = self.NT
+
+        #if NT==0: NT=1 #Initial start? TODO: validate and remove
+        #bp = lambda i: ( Q[i] + P[i] * NT/(1+N[i]) )
 
         max_i = randint(0,len(P)-1)
         max_bp = 0
 
-
         IDX = list(range(len(P))) 
         shuffle(IDX)
         for i in IDX:
-            cur_bp = bp(i)
+            # NEW CHANGE
+            cur_bp = self.BP[i].item()
             if cur_bp > max_bp: max_bp=cur_bp; max_i = i
         return max_i
 
@@ -168,6 +181,10 @@ class Node:
         self.N[a] += 1
         self.W[a] += w
         self.Q[a] = self.W[a]/self.N[a]
+
+        #NEW CHANGE
+        self.BP[a] = ( self.Q[a] + self.P[a] * self.NT/(1+self.N[a]) )
+        if self.up != None: self.up.NT += 1
         return self.up
 
     def play(self, det=False):

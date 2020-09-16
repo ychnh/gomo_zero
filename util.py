@@ -1,6 +1,24 @@
 import re 
-
 import numpy as np
+
+i = lambda b:b
+r1 = lambda b: b.rot90(1,(2,3))
+r2 = lambda b: b.rot90(2,(2,3))
+r3 = lambda b: b.rot90(3,(2,3))
+s = lambda b: b.flip(3)
+sr1 = lambda b: s(r1(b))
+sr2 = lambda b: s(r2(b))
+sr3 = lambda b: s(r3(b))
+# Inverses for convient naming
+r1s = lambda b: r1(s(b))
+r2s = lambda b: r2(s(b))
+r3s = lambda b: r3(s(b))
+transforms =     [i,r1,r2,r3,s,sr1,sr2,sr3]
+inv_transforms = [i,r3,r2,r1,s,r3s,r2s,r1s]
+
+
+
+
 alphabet = 'abcdefghijklmno'
 DCTnum_alph = dict(zip(alphabet, np.arange(15)))
 DCTnum_plyr = {'B':1,'W':2}
@@ -69,14 +87,38 @@ def cont_count(V,TV, count):
     else:
         return 0
 
-def any3(M,lst_m):
+'''
+def find_win(M,lst_m, L=3):
+    R = L-1
     r,c = lst_m
-    p = str(M[r,c].item())
-    rule_3 = re.compile(p+p+p)
+    p = M[r,c].item()
+    #rule_3 = re.compile(p+p+p)
+    lines = linear_nhd(M,r,c,R=R)
+    for li in lines:
+        for j in range(len(li)-L+1):
+            if li[j]==p and li[j+1]==p and li[j+2]==p: return True
+    return False
+    #lines = [ [str(x.item()) for x in li] for li in lines]
+    #lines = [ ''.join(li) for li in lines]
+    #return [ rule_3.search(li)!=None for li in lines]
+'''
+
+
+RULE_3 = {1:re.compile('111'), 2:re.compile('222')}
+def find_win(M,lst_m, L=None):
+    r,c = lst_m
+    #p = str(M[r,c].item())
+    #rule_3 = re.compile(p+p+p)
+    p = M[r,c]
+    rule_3 = RULE_3[p]
     lines = linear_nhd(M,r,c,R=2)
-    lines = [ [str(x.item()) for x in li] for li in lines]
-    lines = [ ''.join(li) for li in lines]
-    return [ rule_3.search(li)!=None for li in lines]
+    lines = [ ''.join([str(x) for x in li]) for li in lines]
+    #lines = [ ''.join(li) for li in lines]
+    #return [ rule_3.search(li)!=None for li in lines]
+     #for li in lines]
+    for li in lines: 
+        if rule_3.search(li)!=None: return True
+    return  False
 
 
 def any4(M,lst_m):
